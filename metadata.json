@@ -1,0 +1,6 @@
+{
+  "name": "AI Code Ideation Hub",
+  "description": "An advanced tool leveraging Google's Gemini API to analyze your code (any language!), provide insightful suggestions, architectural improvements, and innovative ideas. Features file/folder uploads and a sleek, modern UI.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
