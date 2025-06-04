@@ -20,10 +20,11 @@ const globToRegex = (glob: string): RegExp => {
   let patternInput = glob.trim();
   if (!patternInput) return new RegExp('(?!)'); // Regex that never matches for empty patterns
 
-  // Keep track if original ended with a slash (directory intent)
+  // Keep track if original ended with a slash, indicating intent to match a directory.
   const isDirectoryPatternIntent = patternInput.endsWith('/');
-  // Normalize to forward slashes and remove leading/trailing slashes for internal processing
-  // Example: "/path/to/dir/" -> "path/to/dir"; "file.js" -> "file.js"
+  // Normalize path separators to forward slashes for consistent processing.
+  // Remove leading/trailing slashes to simplify subsequent logic.
+  // Example: "/path/to/dir/" becomes "path/to/dir"; "file.js" remains "file.js".
   let normalizedPattern = patternInput.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 
   // If after normalization pattern is empty (e.g. original glob was just "/" or "///")
@@ -34,31 +35,47 @@ const globToRegex = (glob: string): RegExp => {
     return new RegExp(glob.trim().startsWith('/') && isDirectoryPatternIntent ? '^/.*$' : '(?!)');
   }
   
+  // Convert glob special characters to regex equivalents.
+  // Order of replacement matters:
+  // 1. Escape literal dots first to prevent them from being treated as regex "any character".
+  // 2. Replace `**` (globstar) with a placeholder before `*` to avoid `**` being partially converted by `*` rule.
+  //    `**` should match any characters including slashes (directory traversal).
+  // 3. Replace `*` (wildcard) with `[^/]*` to match any characters except slashes (within a single path segment).
+  // 4. Replace the `**` placeholder with `.*` which is the regex equivalent for matching any sequence of characters.
   let regexString = normalizedPattern
-    .replace(/\./g, '\\.')             // Escape dots
-    .replace(/\*\*/g, '@@DOUBTLE_STAR@@') // Placeholder for ** (matches across path segments)
-    .replace(/\*/g, '[^/]*')           // * matches anything except a slash
-    .replace(/@@DOUBTLE_STAR@@/g, '.*'); // ** placeholder replaced with .* (matches anything including slashes)
+    .replace(/\./g, '\\.')             // Escape dots.
+    .replace(/\*\*/g, '@@DOUBTLE_STAR@@') // Placeholder for globstar `**`.
+    .replace(/\*/g, '[^/]*')           // Wildcard `*` matches anything except a slash.
+    .replace(/@@DOUBTLE_STAR@@/g, '.*'); // Globstar `**` placeholder replaced with `.*`.
 
+  // Handle directory-specific matching.
   if (isDirectoryPatternIntent) {
-    // Pattern like "dir/" or "path/to/dir/"
-    // Should match "dir/file.js", "dir/subdir/file.js"
-    // regexString becomes the path prefix, e.g., "path/to/dir"
-    regexString = `${regexString}/.*`; // Match anything inside the directory
+    // If the original glob ended with a slash (e.g., "dir/", "path/to/dir/"),
+    // the pattern should match anything inside that directory.
+    // `regexString` currently is the path prefix (e.g., "path/to/dir").
+    // Append `/. *` to match "/any-character-sequence" within that directory.
+    regexString = `${regexString}/.*`;
   } else {
-    // Pattern like "file.js", "*.log", or "dirname" (without trailing slash)
-    // Should match "file.js" or "path/file.js" at the end of a segment.
-    // regexString is the file/dir name pattern, e.g., "[^/]*\\.log" or "file\\.js"
-    regexString = `${regexString}$`; // Anchor to the end of the string (or segment if using lookbehinds, but $ is simpler here)
+    // If not a directory-specific pattern (e.g., "file.js", "*.log", or "dirname" without trailing slash),
+    // the pattern should match the file or directory name at the end of a path segment.
+    // `regexString` is the file/dir name pattern (e.g., "[^/]*\\.log" or "file\\.js").
+    // Anchor to the end of the string (or segment) to ensure it's a full match of the last segment.
+    regexString = `${regexString}$`;
   }
   
-  // Anchor the pattern:
+  // Anchor the pattern to the start of the path if specified.
   // If original glob started with '/', it's anchored to the root of the path.
   if (glob.trim().startsWith('/')) {
-    regexString = `^/${regexString}`; // e.g. ^/dist/.* or ^/file\.js$
+    // e.g. glob "/dist/" becomes regex "^/dist/.*"
+    // e.g. glob "/file.js" becomes regex "^/file\\.js$"
+    regexString = `^/${regexString}`;
   } else {
-    // If not starting with '/', it can match anywhere in the path, preceded by a slash or at the start of path string.
-    regexString = `(?:^|/)${regexString}`; // e.g. (?:^|/)src/.* or (?:^|/)[^/]*\.log$
+    // If not starting with '/', the pattern can match anywhere in the path,
+    // but it must be preceded by a slash or be at the start of the path string.
+    // This ensures that "file.js" doesn't match "somefile.js".
+    // e.g. glob "src/" becomes regex "(?:^|/)src/.*"
+    // e.g. glob "*.log" becomes regex "(?:^|/)[^/]*\\.log$"
+    regexString = `(?:^|/)${regexString}`;
   }
 
   try {
@@ -73,13 +90,20 @@ const globToRegex = (glob: string): RegExp => {
 
 const matchesIgnorePattern = (filePath: string, patterns: RegExp[]): boolean => {
   if (!patterns || patterns.length === 0) return false;
-  // Normalize path to use forward slashes, and remove leading slash for relative matching against non-anchored patterns
+
+  // Normalize the input file path:
+  // - Replace backslashes with forward slashes for consistency.
+  // - `normalizedFilePath`: Remove leading slash for matching against patterns not anchored to root (e.g. "src/file.js").
+  // - `absoluteNormalizedFilePath`: Ensure a leading slash for matching against patterns anchored to root (e.g. "/dist/").
   const normalizedFilePath = filePath.replace(/\\/g, '/').replace(/^\//, '');
-  const absoluteNormalizedFilePath = `/${normalizedFilePath}`; // For patterns anchored to root
+  const absoluteNormalizedFilePath = `/${normalizedFilePath}`; // For patterns meant to be anchored to root.
 
   for (const regex of patterns) {
-    // Test against both relative-style path and absolute-style path
-    // because some regexes might be anchored with ^/
+    // Conditional logic for testing regexes:
+    // If a regex pattern string starts with `^/`, it was generated from a glob anchored to the root (e.g., "/node_modules/").
+    // Such patterns should only be tested against the `absoluteNormalizedFilePath`.
+    // Other patterns (not explicitly anchored to root, e.g., "*.log" or "dist/") are tested against `normalizedFilePath`.
+    // This allows "dist/" to match "/dist/" or "path/to/dist/".
     if (regex.source.startsWith('^/')) {
         if (regex.test(absoluteNormalizedFilePath)) return true;
     } else {
@@ -205,7 +229,6 @@ const CodeInputForm: React.FC<CodeInputFormProps> = ({ onSubmit, isLoading }) =>
         // @ts-ignore webkitdirectory is a non-standard attribute
         webkitdirectory="" mozdirectory="" directory=""
         style={{ display: 'none' }} aria-hidden="true"
-        accept=".js,.jsx,.ts,.tsx,.py,.java,.cs,.cpp,.c,.go,.rb,.php,.swift,.kt,.rs,.html,.css,.sql,.sh,.md,.json,.yaml, text/*"
       />
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
