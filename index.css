@@ -1,0 +1,8 @@
+/* Basic CSS file for the AI Code Ideation Hub */
+/* This file is referenced in index.html but may not contain styles since we use Tailwind CSS */
+
+/* Any additional custom styles can be added here */
+body {
+  /* Fallback styles in case Tailwind doesn't load */
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
