@@ -17,7 +17,14 @@ const OriginalCodeExcerpt: React.FC<OriginalCodeExcerptProps> = ({
   endLine,
   contextLines = 2,
 }) => {
-  if (!analysisSource || startLine <= 0 || endLine < startLine) {
+  // Enhanced input validation
+  if (!analysisSource ||
+      !Number.isInteger(startLine) ||
+      !Number.isInteger(endLine) ||
+      startLine <= 0 ||
+      endLine < startLine ||
+      !Number.isInteger(contextLines) ||
+      contextLines < 0) {
     return null;
   }
 
@@ -43,6 +50,13 @@ const OriginalCodeExcerpt: React.FC<OriginalCodeExcerptProps> = ({
   }
 
   const lines = relevantFileContent.split('\n');
+
+  // Ensure we don't go out of bounds
+  const maxLineNumber = lines.length;
+  if (startLine > maxLineNumber || endLine > maxLineNumber) {
+    return <p className="text-xs text-slate-400 italic my-1">Requested line numbers exceed file length ({maxLineNumber} lines).</p>;
+  }
+
   const displayStartLine = Math.max(0, startLine - 1 - contextLines);
   const displayEndLine = Math.min(lines.length, endLine + contextLines);
 

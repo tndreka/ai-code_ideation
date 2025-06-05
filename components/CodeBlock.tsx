@@ -8,16 +8,39 @@ interface CodeBlockProps {
 const CodeBlock: React.FC<CodeBlockProps> = ({ language, code }) => {
   const [isCopied, setIsCopied] = useState(false);
 
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(code)
-      .then(() => {
+  const handleCopy = useCallback(async () => {
+    try {
+      // Check if clipboard API is available
+      if (!navigator.clipboard) {
+        throw new Error('Clipboard API not available');
+      }
+
+      await navigator.clipboard.writeText(code);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy code: ', err);
+
+      // Fallback for older browsers or when clipboard API fails
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = code;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+
         setIsCopied(true);
         setTimeout(() => setIsCopied(false), 2000);
-      })
-      .catch(err => {
-        console.error('Failed to copy code: ', err);
-        alert('Failed to copy code to clipboard.');
-      });
+      } catch (fallbackErr) {
+        console.error('Fallback copy also failed:', fallbackErr);
+        alert('Failed to copy code to clipboard. Please select and copy manually.');
+      }
+    }
   }, [code]);
 
   return (
@@ -28,8 +51,15 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code }) => {
         </span>
         <button
           onClick={handleCopy}
-          className="flex items-center text-xs text-slate-400 hover:text-sky-300 transition-colors duration-150 focus:outline-none"
-          aria-label="Copy code to clipboard"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleCopy();
+            }
+          }}
+          className="flex items-center text-xs text-slate-400 hover:text-sky-300 focus:text-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-800 rounded px-2 py-1 transition-colors duration-150"
+          aria-label={isCopied ? "Code copied to clipboard" : "Copy code to clipboard"}
+          aria-live="polite"
         >
           {isCopied ? (
             <>

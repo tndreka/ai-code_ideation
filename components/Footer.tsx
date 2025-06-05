@@ -8,7 +8,7 @@ const Footer: React.FC = () => {
           Powered by <a href="https://deepmind.google/technologies/gemini/" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:text-sky-300 hover:underline">Gemini API</a> &amp; React. Styled with Tailwind CSS.
         </p>
         <p className="text-gray-500 text-xs mt-2">
-          &copy; ${new Date().getFullYear()} AI Code Ideation Hub. For demonstration and educational purposes.
+          &copy; {new Date().getFullYear()} AI Code Ideation Hub. For demonstration and educational purposes.
         </p>
       </div>
     </footer>

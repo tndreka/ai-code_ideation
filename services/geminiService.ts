@@ -20,22 +20,35 @@ interface StreamHandlers {
 }
 
 const formatCodeForPrompt = (source: UploadedFile[] | string): string => {
-  if (typeof source === 'string') {
-    return `
+  try {
+    if (typeof source === 'string') {
+      if (!source.trim()) {
+        return "No code provided for analysis.";
+      }
+      return `
 \`\`\`
 ${source}
 \`\`\`
 `;
-  } else if (Array.isArray(source) && source.length > 0) {
-    let projectCode = "This project consists of the following files:\n\n";
-    for (const file of source) {
-      projectCode += `// --- File: ${file.path} ---\n`;
-      projectCode += `${file.content}\n`;
-      projectCode += `// --- End File: ${file.path} ---\n\n`;
+    } else if (Array.isArray(source) && source.length > 0) {
+      let projectCode = "This project consists of the following files:\n\n";
+      for (const file of source) {
+        // Validate file structure
+        if (!file || typeof file.path !== 'string' || typeof file.content !== 'string') {
+          console.warn('Invalid file structure detected:', file);
+          continue;
+        }
+        projectCode += `// --- File: ${file.path} ---\n`;
+        projectCode += `${file.content}\n`;
+        projectCode += `// --- End File: ${file.path} ---\n\n`;
+      }
+      return projectCode;
     }
-    return projectCode;
+    return "No code or files provided for analysis.";
+  } catch (error) {
+    console.error('Error formatting code for prompt:', error);
+    return "Error occurred while formatting code for analysis.";
   }
-  return "No code or files provided for analysis.";
 };
 
 const getBaseSystemPrompt = (analysisTypeName: string): string => {
@@ -324,26 +337,41 @@ export const sendFollowUpMessage = async (
 ): Promise<void> => {
   const { onChunkReceived, onStreamComplete, onStreamError } = handlers;
 
+  // Input validation
+  if (!handlers || typeof onChunkReceived !== 'function' || typeof onStreamComplete !== 'function' || typeof onStreamError !== 'function') {
+    console.error('Invalid handlers provided to sendFollowUpMessage');
+    return;
+  }
+
   if (!ai) {
     onStreamError(new Error("AI Service not initialized. Please ensure API_KEY is configured."));
     return;
   }
+
   if (!activeChatSession) {
     onStreamError(new Error("Chat session not active. Please start a new review first."));
     return;
   }
-  if (!message.trim()) {
-    onStreamComplete(); 
+
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    onStreamComplete();
     return;
   }
 
   try {
-    const responseStream = await activeChatSession.sendMessageStream({ message });
+    const responseStream = await activeChatSession.sendMessageStream({ message: message.trim() });
+
+    if (!responseStream) {
+      throw new Error("No response stream received from AI service");
+    }
+
     for await (const chunk of responseStream) {
-      onChunkReceived(chunk.text);
+      if (chunk && typeof chunk.text === 'string') {
+        onChunkReceived(chunk.text);
+      }
     }
     onStreamComplete();
-  } catch (error: any) {
+  } catch (error: unknown) {
     handleError(error, onStreamError, "sending follow-up");
   }
 };

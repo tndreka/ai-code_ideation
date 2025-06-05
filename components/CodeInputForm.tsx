@@ -15,10 +15,22 @@ interface CodeInputFormProps {
   isLoading: boolean;
 }
 
+// Cache for compiled regex patterns to improve performance
+const regexCache = new Map<string, RegExp>();
+
 // Converts a glob pattern to a RegExp object for matching file paths.
 const globToRegex = (glob: string): RegExp => {
+  // Check cache first
+  if (regexCache.has(glob)) {
+    return regexCache.get(glob)!;
+  }
+
   let patternInput = glob.trim();
-  if (!patternInput) return new RegExp('(?!)'); // Regex that never matches for empty patterns
+  if (!patternInput) {
+    const emptyRegex = new RegExp('(?!)'); // Regex that never matches for empty patterns
+    regexCache.set(glob, emptyRegex);
+    return emptyRegex;
+  }
 
   // Keep track if original ended with a slash, indicating intent to match a directory.
   const isDirectoryPatternIntent = patternInput.endsWith('/');
@@ -32,9 +44,11 @@ const globToRegex = (glob: string): RegExp => {
     // If it was meant to be a directory (like "/"), match everything if anchored from root, or specific files if not.
     // For simplicity, if original was "/" and meant directory, it matches all files under root.
     // If it was empty or just slashes and not a directory, it matches nothing.
-    return new RegExp(glob.trim().startsWith('/') && isDirectoryPatternIntent ? '^/.*$' : '(?!)');
+    const emptyNormalizedRegex = new RegExp(glob.trim().startsWith('/') && isDirectoryPatternIntent ? '^/.*$' : '(?!)');
+    regexCache.set(glob, emptyNormalizedRegex);
+    return emptyNormalizedRegex;
   }
-  
+
   // Convert glob special characters to regex equivalents.
   // Order of replacement matters:
   // 1. Escape literal dots first to prevent them from being treated as regex "any character".
@@ -44,16 +58,16 @@ const globToRegex = (glob: string): RegExp => {
   // 4. Replace the `**` placeholder with `.*` which is the regex equivalent for matching any sequence of characters.
   let regexString = normalizedPattern
     .replace(/\./g, '\\.')             // Escape dots.
-    .replace(/\*\*/g, '@@DOUBTLE_STAR@@') // Placeholder for globstar `**`.
+    .replace(/\*\*/g, '@@DOUBLE_STAR@@') // Placeholder for globstar `**` (fixed typo).
     .replace(/\*/g, '[^/]*')           // Wildcard `*` matches anything except a slash.
-    .replace(/@@DOUBTLE_STAR@@/g, '.*'); // Globstar `**` placeholder replaced with `.*`.
+    .replace(/@@DOUBLE_STAR@@/g, '.*'); // Globstar `**` placeholder replaced with `.*`.
 
   // Handle directory-specific matching.
   if (isDirectoryPatternIntent) {
     // If the original glob ended with a slash (e.g., "dir/", "path/to/dir/"),
     // the pattern should match anything inside that directory.
     // `regexString` currently is the path prefix (e.g., "path/to/dir").
-    // Append `/. *` to match "/any-character-sequence" within that directory.
+    // Append `/.*` to match "/any-character-sequence" within that directory.
     regexString = `${regexString}/.*`;
   } else {
     // If not a directory-specific pattern (e.g., "file.js", "*.log", or "dirname" without trailing slash),
@@ -62,7 +76,7 @@ const globToRegex = (glob: string): RegExp => {
     // Anchor to the end of the string (or segment) to ensure it's a full match of the last segment.
     regexString = `${regexString}$`;
   }
-  
+
   // Anchor the pattern to the start of the path if specified.
   // If original glob started with '/', it's anchored to the root of the path.
   if (glob.trim().startsWith('/')) {
@@ -79,11 +93,15 @@ const globToRegex = (glob: string): RegExp => {
   }
 
   try {
-    return new RegExp(regexString);
+    const compiledRegex = new RegExp(regexString);
+    regexCache.set(glob, compiledRegex);
+    return compiledRegex;
   } catch (e) {
     console.warn(`Invalid glob pattern "${glob}", using literal match. Error: ${e}`);
     const literal = patternInput.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Fallback
-    return new RegExp(`^${literal}$`); // Simple literal match if regex compilation fails
+    const fallbackRegex = new RegExp(`^${literal}$`); // Simple literal match if regex compilation fails
+    regexCache.set(glob, fallbackRegex);
+    return fallbackRegex;
   }
 };
 
@@ -150,28 +168,51 @@ const CodeInputForm: React.FC<CodeInputFormProps> = ({ onSubmit, isLoading }) =>
 
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const browserFiles = event.target.files;
-    if (browserFiles && browserFiles.length > 0) {
+    if (!browserFiles || browserFiles.length === 0) return;
+
+    try {
       // Create a new array for immutable update
       const currentFilesMap = new Map(uploadedFiles.map(f => [f.path, f]));
       const newFilesList: UploadedFile[] = [...uploadedFiles]; // Start with existing files
+      const errors: string[] = [];
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
 
       for (const file of Array.from(browserFiles)) {
         const path = (file as any).webkitRelativePath || file.name;
-        if (!currentFilesMap.has(path)) { 
-            try {
-              const content = await readFileAsText(file);
-              const newFileEntry = { name: file.name, path, content };
-              newFilesList.push(newFileEntry);
-              currentFilesMap.set(path, newFileEntry); // Add to map to prevent duplicates in same batch
-            } catch (e) {
-              console.error("Error reading file:", file.name, e);
-              alert(`Error reading file ${file.name}. It might be too large or unreadable.`);
-            }
+
+        // Skip if file already exists
+        if (currentFilesMap.has(path)) continue;
+
+        // Check file size
+        if (file.size > MAX_FILE_SIZE) {
+          errors.push(`File ${file.name} is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is 10MB.`);
+          continue;
+        }
+
+        try {
+          const content = await readFileAsText(file);
+          const newFileEntry = { name: file.name, path, content };
+          newFilesList.push(newFileEntry);
+          currentFilesMap.set(path, newFileEntry); // Add to map to prevent duplicates in same batch
+        } catch (e) {
+          console.error("Error reading file:", file.name, e);
+          errors.push(`Error reading file ${file.name}: ${e instanceof Error ? e.message : 'Unknown error'}`);
         }
       }
-      
+
       setUploadedFiles(newFilesList);
-      if (event.target) event.target.value = ''; 
+
+      // Show errors if any
+      if (errors.length > 0) {
+        alert(`Some files could not be loaded:\n${errors.join('\n')}`);
+      }
+
+    } catch (e) {
+      console.error("Unexpected error during file handling:", e);
+      alert(`Unexpected error occurred while processing files: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      // Always clear the input to allow re-selecting the same files
+      if (event.target) event.target.value = '';
     }
   }, [uploadedFiles]);
 

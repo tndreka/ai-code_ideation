@@ -1,5 +1,5 @@
 
-import type { LanguageOption, AnalysisScopeOption, FrameworkOption } from '../types';
+import type { LanguageOption, AnalysisScopeOption, FrameworkOption } from './types';
 
 // SUPPORTED_LANGUAGES is used for the optional language override dropdown.
 export const SUPPORTED_LANGUAGES: LanguageOption[] = [

@@ -15,44 +15,65 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ mermaidCode, title, dia
   const mermaidContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let isMounted = true; // Track if component is still mounted
     let tempDiv: HTMLDivElement | null = null; // Keep track of tempDiv for cleanup
+
     const renderMermaid = async () => {
+      if (!isMounted) return; // Early return if component unmounted
+
       setError(null);
       setSvgDiagram(null);
+
       if (!mermaidCode.trim()) {
-        setError("No diagram code provided.");
+        if (isMounted) setError("No diagram code provided.");
         return;
       }
+
       try {
         const uniqueRenderId = `mermaid-render-${diagramId}-${Date.now()}`;
 
         tempDiv = document.createElement('div');
         tempDiv.id = uniqueRenderId;
-        tempDiv.style.display = 'none'; 
+        tempDiv.style.display = 'none';
         document.body.appendChild(tempDiv);
-        
+
         const { svg } = await mermaid.render(uniqueRenderId, mermaidCode.trim());
-        setSvgDiagram(svg);
+
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setSvgDiagram(svg);
+        }
 
       } catch (e: any) {
         console.error(`Mermaid rendering error for ID ${diagramId}:`, e);
-        setError(e.message || "Failed to render diagram. The syntax might be invalid.");
-        setSvgDiagram(null);
+        if (isMounted) {
+          setError(e.message || "Failed to render diagram. The syntax might be invalid.");
+          setSvgDiagram(null);
+        }
       } finally {
-        // Conditional cleanup
+        // Always cleanup tempDiv
         if (tempDiv && tempDiv.parentNode === document.body) {
-          document.body.removeChild(tempDiv);
+          try {
+            document.body.removeChild(tempDiv);
+          } catch (cleanupError) {
+            console.warn('Error during tempDiv cleanup:', cleanupError);
+          }
         }
         tempDiv = null; // Clear reference
       }
     };
 
     renderMermaid();
-    
+
     // Cleanup function for useEffect
     return () => {
+        isMounted = false; // Mark component as unmounted
         if (tempDiv && tempDiv.parentNode === document.body) {
-            document.body.removeChild(tempDiv);
+            try {
+              document.body.removeChild(tempDiv);
+            } catch (cleanupError) {
+              console.warn('Error during useEffect cleanup:', cleanupError);
+            }
         }
         tempDiv = null;
     };

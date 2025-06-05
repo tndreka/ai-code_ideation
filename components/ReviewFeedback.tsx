@@ -20,38 +20,59 @@ type FeedbackSegmentInput =
 
 
 const parseLineNumbers = (line: string): { start: number; end: number } | undefined => {
+  if (!line || typeof line !== 'string') return undefined;
+
   const match = line.match(/^LINE_NUMBERS:\s*(\d+)-(\d+)$/);
-  if (match) {
+  if (match && match[1] && match[2]) {
     const start = parseInt(match[1], 10);
     const end = parseInt(match[2], 10);
-    if (!isNaN(start) && !isNaN(end) && start <= end) {
+    if (!isNaN(start) && !isNaN(end) && start > 0 && end > 0 && start <= end) {
       return { start, end };
     }
   }
+
   const singleMatch = line.match(/^LINE_NUMBERS:\s*(\d+)$/);
-  if (singleMatch) {
+  if (singleMatch && singleMatch[1]) {
     const lineNo = parseInt(singleMatch[1], 10);
-    if(!isNaN(lineNo)) return {start: lineNo, end: lineNo};
+    if (!isNaN(lineNo) && lineNo > 0) {
+      return { start: lineNo, end: lineNo };
+    }
   }
+
   return undefined;
 };
 
 const extractMarkdownCodeBlock = (lines: string[], startIndex: number): { code: string, lang?: string, nextIndex: number } | null => {
-    if (startIndex >= lines.length || !lines[startIndex].startsWith('```')) {
+    if (!Array.isArray(lines) || startIndex < 0 || startIndex >= lines.length || !lines[startIndex]?.startsWith('```')) {
         return null;
     }
+
     const lang = lines[startIndex].substring(3).trim();
     const codeLines: string[] = [];
     let currentIndex = startIndex + 1;
-    while(currentIndex < lines.length && !lines[currentIndex].startsWith('```')) {
-        codeLines.push(lines[currentIndex]);
+
+    // Prevent infinite loops with a reasonable limit
+    const maxLines = 10000;
+    let lineCount = 0;
+
+    while (currentIndex < lines.length &&
+           !lines[currentIndex]?.startsWith('```') &&
+           lineCount < maxLines) {
+        codeLines.push(lines[currentIndex] || '');
+        currentIndex++;
+        lineCount++;
+    }
+
+    // Consume the closing ``` if found
+    if (currentIndex < lines.length && lines[currentIndex]?.startsWith('```')) {
         currentIndex++;
     }
-    // Consume the closing ```
-    if (currentIndex < lines.length && lines[currentIndex].startsWith('```')) {
-        currentIndex++;
-    }
-    return { code: codeLines.join('\n'), lang: lang || undefined, nextIndex: currentIndex };
+
+    return {
+        code: codeLines.join('\n'),
+        lang: lang || undefined,
+        nextIndex: currentIndex
+    };
 };
 
 

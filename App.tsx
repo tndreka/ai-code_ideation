@@ -17,22 +17,30 @@ const App: React.FC = () => {
   const [isStreamingComplete, setIsStreamingComplete] = useState<boolean>(false);
 
   const handleReviewSubmit = useCallback(async (
-    source: UploadedFile[] | string, 
-    languageHint?: string, 
+    source: UploadedFile[] | string,
+    languageHint?: string,
     analysisScope?: AnalysisScope,
     framework?: string,
     projectGoals?: string,
-    ignorePatterns?: string 
+    ignorePatterns?: string
   ) => {
+    // Input validation
+    if (!source || (typeof source === 'string' && !source.trim()) || (Array.isArray(source) && source.length === 0)) {
+      setError("No code or files provided for analysis.");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
-    setFeedback(''); 
+    setFeedback('');
     setAnalysisSource(source); // source here is already filtered by CodeInputForm
     setIsStreamingComplete(false);
 
     const streamHandlers = {
       onChunkReceived: (chunkText: string) => {
-        setFeedback(prevFeedback => (prevFeedback || '') + chunkText);
+        if (typeof chunkText === 'string') {
+          setFeedback(prevFeedback => (prevFeedback || '') + chunkText);
+        }
       },
       onStreamComplete: () => {
         setIsLoading(false);
@@ -40,25 +48,29 @@ const App: React.FC = () => {
       },
       onStreamError: (streamError: Error) => {
         console.error("Streaming Error in App:", streamError);
-        setError(streamError.message || "An unexpected error occurred during streaming.");
+        const errorMessage = streamError?.message || "An unexpected error occurred during streaming.";
+        setError(errorMessage);
         setIsLoading(false);
-        setIsStreamingComplete(true); 
+        setIsStreamingComplete(true);
       }
     };
 
     try {
       await initiateReviewAndChat(
-        source, 
-        streamHandlers, 
-        languageHint, 
+        source,
+        streamHandlers,
+        languageHint,
         analysisScope,
         framework,
         projectGoals,
         ignorePatterns // Pass the raw ignore patterns text for AI context
       );
-    } catch (initialError: any) { 
+    } catch (initialError: unknown) {
       console.error("Initial API Error in App:", initialError);
-      setError(initialError.message || "An unexpected error occurred while initiating the analysis.");
+      const errorMessage = initialError instanceof Error
+        ? initialError.message
+        : "An unexpected error occurred while initiating the analysis.";
+      setError(errorMessage);
       setIsLoading(false);
       setIsStreamingComplete(true);
     }
