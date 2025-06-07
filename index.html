@@ -1,4 +1,670 @@
+
 <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Code Ideation Hub</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-image: linear-gradient(to bottom right, #0F172A, #1E293B, #0F172A);
+    }
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #1e293b;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 5px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #64748b;
+    }
+    .aurora-background {
+      position: relative;
+      overflow: hidden;
+    }
+    .aurora-background::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 150%;
+      height: 150%;
+      background-image: radial-gradient(ellipse at center, rgba(2, 132, 199, 0.15), transparent 60%),
+                        radial-gradient(ellipse at top left, rgba(14, 165, 233, 0.1), transparent 70%),
+                        radial-gradient(ellipse at bottom right, rgba(56, 189, 248, 0.1), transparent 70%);
+      transform: translate(-50%, -50%);
+      filter: blur(60px);
+      opacity: 0.7;
+      z-index: 0;
+      pointer-events: none;
+      animation: auroraShift 20s infinite linear;
+    }
+    @keyframes auroraShift {
+      0% { transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+      50% { transform: translate(-50%, -50%) rotate(180deg) scale(1.1); }
+      100% { transform: translate(-50%, -50%) rotate(360deg) scale(1); }
+    }
+    .content-wrapper {
+        position: relative;
+        z-index: 1;
+    }
+    .mermaid-diagram-container {
+      background-color: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-top: 1rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+      overflow: auto;
+    }
+    .mermaid-diagram-container svg {
+      display: block;
+      margin: auto;
+      max-width: 100%;
+    }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "react": "https://esm.sh/react@^19.1.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.3.0",
+    "mermaid": "https://esm.sh/mermaid@10.9.1/dist/mermaid.esm.min.mjs"
+  }
+}
+</script>
+</head>
+<body class="text-gray-100 selection:bg-sky-500 selection:text-white">
+  <div id="root"></div>
+  
+  <script type="module">
+    import React from 'react';
+    import { createRoot } from 'react-dom/client';
+    import mermaid from 'mermaid';
+
+    // Initialize Mermaid
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      darkMode: true,
+      securityLevel: 'loose',
+      fontFamily: "'Inter', sans-serif",
+      themeVariables: {
+        background: '#0F172A',
+        mainBkg: '#1E293B',
+        primaryColor: '#38BDF8',
+        primaryTextColor: '#E2E8F0',
+        lineColor: '#475569',
+        fontSize: '14px',
+      }
+    });
+
+    const { useState, useCallback, useMemo, useRef, useEffect } = React;
+
+    // Header Component
+    function Header({ title }) {
+      return React.createElement('header', 
+        { className: 'bg-slate-800/50 backdrop-blur-md shadow-lg p-5 sm:p-6 border-b border-slate-700/50 sticky top-0 z-50' },
+        React.createElement('div', 
+          { className: 'container mx-auto flex items-center justify-center' },
+          React.createElement('svg', {
+            xmlns: "http://www.w3.org/2000/svg",
+            fill: "none",
+            viewBox: "0 0 24 24",
+            strokeWidth: 1.5,
+            stroke: "currentColor",
+            className: "w-10 h-10 mr-4 text-sky-400"
+          },
+            React.createElement('path', {
+              strokeLinecap: "round",
+              strokeLinejoin: "round",
+              d: "M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m1.5-4.5h16.5a1.5 1.5 0 011.5 1.5v6.75a1.5 1.5 0 01-1.5 1.5H3.75a1.5 1.5 0 01-1.5-1.5V9.75A1.5 1.5 0 013.75 8.25h16.5M16.5 5.25v1.5m0 0H8.25m8.25 0S15 9.75 12 9.75 7.5 6.75 7.5 6.75M7.5 3v1.5m0 0h9"
+            })
+          ),
+          React.createElement('h1', 
+            { className: 'text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-sky-300 via-sky-400 to-teal-400 tracking-tight' },
+            title
+          )
+        )
+      );
+    }
+
+    // Footer Component
+    function Footer() {
+      return React.createElement('footer', 
+        { className: 'bg-slate-800/30 py-8 mt-auto border-t border-slate-700/50' },
+        React.createElement('div', 
+          { className: 'container mx-auto text-center px-4' },
+          React.createElement('p', 
+            { className: 'text-gray-400 text-sm' },
+            'Powered by ',
+            React.createElement('a', {
+              href: 'https://deepmind.google/technologies/gemini/',
+              target: '_blank',
+              rel: 'noopener noreferrer',
+              className: 'text-sky-400 hover:text-sky-300 hover:underline'
+            }, 'Gemini API'),
+            ' & React. Styled with Tailwind CSS.'
+          ),
+          React.createElement('p', 
+            { className: 'text-gray-500 text-xs mt-2' },
+            `© ${new Date().getFullYear()} AI Code Ideation Hub. For demonstration and educational purposes.`
+          )
+        )
+      );
+    }
+
+    // Loading Spinner Component
+    function LoadingSpinner() {
+      return React.createElement('div', 
+        { className: 'flex flex-col justify-center items-center py-12 my-8 bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 shadow-xl' },
+        React.createElement('svg', {
+          className: 'animate-spin h-12 w-12 text-sky-500',
+          xmlns: "http://www.w3.org/2000/svg",
+          fill: "none",
+          viewBox: "0 0 24 24"
+        },
+          React.createElement('circle', {
+            className: 'opacity-25',
+            cx: "12",
+            cy: "12",
+            r: "10",
+            stroke: "currentColor",
+            strokeWidth: "4"
+          }),
+          React.createElement('path', {
+            className: 'opacity-75',
+            fill: "currentColor",
+            d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          })
+        ),
+        React.createElement('p', 
+          { className: 'mt-6 text-xl font-semibold text-gray-200' },
+          'Conjuring AI Insights...'
+        ),
+        React.createElement('p', 
+          { className: 'mt-1 text-sm text-gray-400' },
+          'Please wait while we analyze your code.'
+        )
+      );
+    }
+
+    // Error Display Component
+    function ErrorDisplay({ message }) {
+      if (!message) return null;
+      
+      return React.createElement('div', 
+        {
+          className: 'my-8 p-5 sm:p-6 bg-red-700/20 backdrop-blur-sm border border-red-600/50 text-red-200 rounded-xl shadow-lg',
+          role: 'alert',
+          'aria-live': 'assertive'
+        },
+        React.createElement('div', 
+          { className: 'flex items-start' },
+          React.createElement('svg', {
+            xmlns: "http://www.w3.org/2000/svg",
+            fill: "none",
+            viewBox: "0 0 24 24",
+            strokeWidth: 1.5,
+            stroke: "currentColor",
+            className: "w-7 h-7 mr-3 text-red-400 flex-shrink-0"
+          },
+            React.createElement('path', {
+              strokeLinecap: "round",
+              strokeLinejoin: "round",
+              d: "M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"
+            })
+          ),
+          React.createElement('div', null,
+            React.createElement('strong', 
+              { className: 'font-semibold text-red-100 text-lg' },
+              'Oops! An Error Occurred:'
+            ),
+            React.createElement('p', 
+              { className: 'mt-1.5 text-sm text-red-200/90' },
+              message
+            )
+          )
+        )
+      );
+    }
+
+    // Simple Code Input Form Component
+    function CodeInputForm({ onSubmit, isLoading }) {
+      const [code, setCode] = useState('');
+      const [selectedLanguage, setSelectedLanguage] = useState('auto');
+      const [selectedAnalysisScope, setSelectedAnalysisScope] = useState('general_ideation');
+      const [selectedFramework, setSelectedFramework] = useState('none');
+      const [projectGoals, setProjectGoals] = useState('');
+      const [ignorePatternsText, setIgnorePatternsText] = useState('node_modules/\ndist/\nbuild/\n.git/\n*.log\n*.tmp');
+      const fileInputRef = useRef(null);
+
+      const supportedLanguages = [
+        { value: 'auto', label: 'Auto-detect (Default)' },
+        { value: 'javascript', label: 'JavaScript' },
+        { value: 'typescript', label: 'TypeScript' },
+        { value: 'python', label: 'Python' },
+        { value: 'java', label: 'Java' },
+        { value: 'csharp', label: 'C#' },
+        { value: 'cpp', label: 'C++' },
+        { value: 'go', label: 'Go' },
+        { value: 'rust', label: 'Rust' },
+        { value: 'php', label: 'PHP' },
+        { value: 'ruby', label: 'Ruby' }
+      ];
+
+      const supportedAnalysisScopes = [
+        { value: 'general_ideation', label: 'General Ideation (Default)' },
+        { value: 'performance_optimization', label: 'Performance Optimization' },
+        { value: 'refactoring_suggestions', label: 'Refactoring for Testability' },
+        { value: 'security_analysis', label: 'Security Analysis' },
+        { value: 'architecture_review', label: 'Architecture Review' },
+        { value: 'api_design', label: 'API Design' }
+      ];
+
+      const supportedFrameworks = [
+        { value: 'none', label: 'None / Other (Default)' },
+        { value: 'react', label: 'React' },
+        { value: 'vue', label: 'Vue.js' },
+        { value: 'angular', label: 'Angular' },
+        { value: 'nodejs', label: 'Node.js' },
+        { value: 'express', label: 'Express.js' },
+        { value: 'django', label: 'Django' },
+        { value: 'flask', label: 'Flask' },
+        { value: 'spring', label: 'Spring Boot' },
+        { value: 'dotnet', label: '.NET' }
+      ];
+
+      const handleSubmit = (event) => {
+        event.preventDefault();
+        if (code.trim()) {
+          onSubmit(
+            code,
+            selectedLanguage !== 'auto' ? selectedLanguage : undefined,
+            selectedAnalysisScope,
+            selectedFramework !== 'none' ? selectedFramework : undefined,
+            projectGoals.trim() || undefined,
+            ignorePatternsText.trim() || undefined
+          );
+        }
+      };
+
+      const handleClear = () => {
+        setCode('');
+        setSelectedLanguage('auto');
+        setSelectedAnalysisScope('general_ideation');
+        setSelectedFramework('none');
+        setProjectGoals('');
+      };
+
+      return React.createElement('form', 
+        { onSubmit: handleSubmit, className: 'space-y-6' },
+        
+        // File upload and clear buttons
+        React.createElement('div', 
+          { className: 'flex flex-col sm:flex-row gap-4' },
+          React.createElement('button', {
+            type: 'button',
+            onClick: () => fileInputRef.current?.click(),
+            className: 'flex-1 px-4 py-3 bg-sky-600/80 hover:bg-sky-600 text-white rounded-lg font-medium transition-colors border border-sky-500/50 flex items-center justify-center',
+            disabled: isLoading
+          },
+            React.createElement('svg', {
+              xmlns: "http://www.w3.org/2000/svg",
+              fill: "none",
+              viewBox: "0 0 24 24",
+              strokeWidth: 1.5,
+              stroke: "currentColor",
+              className: "w-5 h-5 mr-2"
+            },
+              React.createElement('path', {
+                strokeLinecap: "round",
+                strokeLinejoin: "round",
+                d: "M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
+              })
+            ),
+            'Load File(s) / Folder'
+          ),
+          React.createElement('button', {
+            type: 'button',
+            onClick: handleClear,
+            className: 'px-6 py-3 bg-gray-600/80 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors border border-gray-500/50',
+            disabled: isLoading
+          },
+            React.createElement('svg', {
+              xmlns: "http://www.w3.org/2000/svg",
+              fill: "none",
+              viewBox: "0 0 24 24",
+              strokeWidth: 1.5,
+              stroke: "currentColor",
+              className: "w-5 h-5 mr-2 inline"
+            },
+              React.createElement('path', {
+                strokeLinecap: "round",
+                strokeLinejoin: "round",
+                d: "M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+              })
+            ),
+            'Clear All'
+          )
+        ),
+
+        // Hidden file input
+        React.createElement('input', {
+          ref: fileInputRef,
+          type: 'file',
+          multiple: true,
+          style: { display: 'none' },
+          onChange: () => alert('File upload feature requires backend integration')
+        }),
+
+        // Configuration section
+        React.createElement('div', 
+          { className: 'grid grid-cols-1 md:grid-cols-2 gap-4' },
+          
+          // Analysis Scope
+          React.createElement('div', null,
+            React.createElement('label', 
+              { className: 'block text-sm font-semibold text-gray-200 mb-2' },
+              'Analysis Scope'
+            ),
+            React.createElement('select', {
+              value: selectedAnalysisScope,
+              onChange: (e) => setSelectedAnalysisScope(e.target.value),
+              className: 'w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:border-sky-500 focus:outline-none',
+              disabled: isLoading
+            },
+              ...supportedAnalysisScopes.map(scope =>
+                React.createElement('option', { key: scope.value, value: scope.value }, scope.label)
+              )
+            )
+          ),
+
+          // Code Language
+          React.createElement('div', null,
+            React.createElement('label', 
+              { className: 'block text-sm font-semibold text-gray-200 mb-2' },
+              'Code Language (Optional)'
+            ),
+            React.createElement('select', {
+              value: selectedLanguage,
+              onChange: (e) => setSelectedLanguage(e.target.value),
+              className: 'w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:border-sky-500 focus:outline-none',
+              disabled: isLoading
+            },
+              ...supportedLanguages.map(lang =>
+                React.createElement('option', { key: lang.value, value: lang.value }, lang.label)
+              )
+            )
+          )
+        ),
+
+        // Framework and Project Goals
+        React.createElement('div', 
+          { className: 'grid grid-cols-1 md:grid-cols-2 gap-4' },
+          
+          // Project Framework
+          React.createElement('div', null,
+            React.createElement('label', 
+              { className: 'block text-sm font-semibold text-gray-200 mb-2' },
+              'Project Framework (Optional)'
+            ),
+            React.createElement('select', {
+              value: selectedFramework,
+              onChange: (e) => setSelectedFramework(e.target.value),
+              className: 'w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:border-sky-500 focus:outline-none',
+              disabled: isLoading
+            },
+              ...supportedFrameworks.map(framework =>
+                React.createElement('option', { key: framework.value, value: framework.value }, framework.label)
+              )
+            )
+          ),
+
+          // Project Goals
+          React.createElement('div', null,
+            React.createElement('label', 
+              { className: 'block text-sm font-semibold text-gray-200 mb-2' },
+              'Project Goals (Optional)'
+            ),
+            React.createElement('textarea', {
+              value: projectGoals,
+              onChange: (e) => setProjectGoals(e.target.value),
+              placeholder: 'e.g., improve performance, refactor for testability, add X feature...',
+              className: 'w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none resize-none',
+              rows: 3,
+              disabled: isLoading
+            })
+          )
+        ),
+
+        // Ignore Files/Folders
+        React.createElement('div', null,
+          React.createElement('label', 
+            { className: 'block text-sm font-semibold text-gray-200 mb-2' },
+            'Ignore Files/Folders (Patterns, 1 per line)'
+          ),
+          React.createElement('textarea', {
+            value: ignorePatternsText,
+            onChange: (e) => setIgnorePatternsText(e.target.value),
+            placeholder: 'node_modules/\ndist/\nbuild/',
+            className: 'w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none resize-none',
+            rows: 4,
+            disabled: isLoading
+          })
+        ),
+
+        // Code Input
+        React.createElement('div', null,
+          React.createElement('label', 
+            { className: 'block text-sm font-semibold text-gray-200 mb-2' },
+            'Code Input'
+          ),
+          React.createElement('textarea', {
+            value: code,
+            onChange: (e) => setCode(e.target.value),
+            placeholder: 'Paste your code here for analysis if not loading files. Language will be auto-detected...',
+            className: 'w-full h-40 p-4 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none resize-none font-mono',
+            disabled: isLoading
+          })
+        ),
+
+        // Submit Button
+        React.createElement('button', {
+          type: 'submit',
+          className: `w-full px-6 py-4 bg-sky-500 hover:bg-sky-600 text-white rounded-lg font-semibold transition-colors text-lg ${isLoading || !code.trim() ? 'opacity-50 cursor-not-allowed' : ''}`,
+          disabled: isLoading || !code.trim()
+        },
+          React.createElement('svg', {
+            xmlns: "http://www.w3.org/2000/svg",
+            fill: "none",
+            viewBox: "0 0 24 24",
+            strokeWidth: 1.5,
+            stroke: "currentColor",
+            className: "w-6 h-6 mr-2 inline"
+          },
+            React.createElement('path', {
+              strokeLinecap: "round",
+              strokeLinejoin: "round",
+              d: "M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L1.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"
+            })
+          ),
+          isLoading ? 'Processing...' : 'Get AI Ideas'
+        )
+      );
+    }
+
+    // Simple Review Feedback Component
+    function ReviewFeedback({ feedback }) {
+      if (!feedback) return null;
+
+      return React.createElement('div', 
+        {
+          className: 'mt-8 sm:mt-12 py-6 sm:py-8 px-5 sm:px-8 bg-slate-800/60 backdrop-blur-md rounded-xl shadow-2xl border border-slate-700/50',
+          'aria-live': 'polite',
+          'aria-atomic': 'true'
+        },
+        React.createElement('h3', 
+          { className: 'text-2xl font-bold text-sky-400 mb-6' },
+          'AI Analysis Results'
+        ),
+        React.createElement('div', 
+          { className: 'prose prose-invert max-w-none' },
+          React.createElement('pre', 
+            { className: 'whitespace-pre-wrap text-gray-300 leading-relaxed' },
+            feedback
+          )
+        )
+      );
+    }
+
+    // Main App Component
+    function App() {
+      const [feedback, setFeedback] = useState(null);
+      const [isLoading, setIsLoading] = useState(false);
+      const [error, setError] = useState(null);
+
+      const handleReviewSubmit = useCallback(async (
+        source,
+        languageHint,
+        analysisScope,
+        framework,
+        projectGoals,
+        ignorePatterns
+      ) => {
+        if (!source || !source.trim()) {
+          setError("No code provided for analysis.");
+          return;
+        }
+
+        setIsLoading(true);
+        setError(null);
+        setFeedback('');
+
+        try {
+          // Simulate API call - replace with your actual service
+          setTimeout(() => {
+            const sampleFeedback = `# Code Analysis Results
+
+## Overview
+Your ${languageHint || 'code'} has been analyzed${framework ? ` with ${framework} framework context` : ''}.
+
+## Key Insights
+- **Code Quality**: Generally well-structured
+- **Performance**: Consider optimization opportunities
+- **Architecture**: Clean separation of concerns
+
+## Suggestions
+1. **Error Handling**: Add comprehensive error boundaries
+2. **Performance**: Implement code splitting for better load times
+3. **Testing**: Increase test coverage for critical paths
+
+## Framework-Specific Notes
+${framework ? `Given your ${framework} setup, consider:
+- Following framework best practices
+- Utilizing framework-specific optimization techniques` : 'No specific framework detected'}
+
+## Project Goals Alignment
+${projectGoals ? `Based on your goals: "${projectGoals}"
+- Recommendations tailored to your objectives
+- Prioritized action items` : 'No specific goals provided'}
+
+This is a demonstration output. Integrate with your actual AI service for real analysis.`;
+
+            setFeedback(sampleFeedback);
+            setIsLoading(false);
+          }, 2000);
+        } catch (err) {
+          setError("An error occurred during analysis.");
+          setIsLoading(false);
+        }
+      }, []);
+
+      return React.createElement('div', 
+        { className: 'min-h-screen flex flex-col text-gray-100 bg-transparent aurora-background' },
+        React.createElement('div', 
+          { className: 'content-wrapper flex flex-col min-h-screen' },
+          React.createElement(Header, { title: 'AI Code Ideation Hub' }),
+          React.createElement('main', 
+            { className: 'flex-grow container mx-auto px-4 py-8 sm:py-12 w-full max-w-4xl' },
+            React.createElement('div', 
+              { className: 'text-center mb-10' },
+              React.createElement('h2', 
+                { className: 'text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-emerald-400 mb-3' },
+                'Unlock Brilliant Ideas from Your Code'
+              ),
+              React.createElement('p', 
+                { className: 'text-gray-300 text-base sm:text-lg max-w-2xl mx-auto' },
+                'Configure your project context, select an analysis focus, paste code, load files, or even entire folders. Our AI will provide targeted insights and ideas. Feedback streams in as it\'s generated!'
+              )
+            ),
+            React.createElement(CodeInputForm, { onSubmit: handleReviewSubmit, isLoading: isLoading }),
+            isLoading && React.createElement(LoadingSpinner),
+            error && React.createElement(ErrorDisplay, { message: error }),
+            feedback && !error && React.createElement(ReviewFeedback, { feedback: feedback }),
+            !isLoading && !error && !feedback && React.createElement('div', 
+              { className: 'mt-12 text-center text-gray-400/80 p-8 border-2 border-dashed border-gray-700/60 rounded-xl bg-slate-800/30' },
+              React.createElement('svg', {
+                xmlns: "http://www.w3.org/2000/svg",
+                fill: "none",
+                viewBox: "0 0 24 24",
+                strokeWidth: 1.5,
+                stroke: "currentColor",
+                className: "w-20 h-20 mx-auto mb-6 text-sky-500/70 opacity-60"
+              },
+                React.createElement('path', {
+                  strokeLinecap: "round",
+                  strokeLinejoin: "round",
+                  d: "M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L1.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.25 12L17 13.75M18.25 12L17 10.25M18.25 12L19.5 13.75M18.25 12L19.5 10.25M12.75 5.25L11.5 4M12.75 5.25L11.5 6.5M12.75 5.25L14 4M12.75 5.25L14 6.5M5.25 12.75L4 11.5M5.25 12.75L6.5 11.5M5.25 12.75L4 14M5.25 12.75L6.5 14M12 18.75L13.75 17M12 18.75L10.25 17M12 18.75L13.75 20.5M12 18.75L10.25 20.5M18.75 5.25L17.5 4M18.75 5.25L17.5 6.5M18.75 5.25L20 4M18.75 5.25L20 6.5"
+                })
+              ),
+              React.createElement('h3', 
+                { className: 'text-2xl font-semibold text-gray-200 mb-2' },
+                'Ready for Insights?'
+              ),
+              React.createElement('p', 
+                { className: 'text-lg text-gray-400' },
+                'Your AI-generated ideation report will appear here once you submit your code or files.'
+              ),
+              React.createElement('p', 
+                { className: 'text-sm mt-3 text-gray-500' },
+                'Let\'s transform your code into a masterpiece of innovation!'
+              )
+            )
+          ),
+          React.createElement(Footer)
+        )
+      );
+    }
+
+    // Render the app
+    const rootElement = document.getElementById('root');
+    if (!rootElement) {
+      throw new Error("Could not find root element to mount to");
+    }
+
+    const root = createRoot(rootElement);
+    root.render(
+      React.createElement(React.StrictMode, null,
+        React.createElement(App)
+      )
+    );
+  </script>
+</body>
+</html>
+<!-- <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -115,4 +781,4 @@
   </script>
   <script type="module" src="/index.tsx"></script>
 </body>
-</html>
+</html> -->
